@@ -1,0 +1,47 @@
+# 虚拟环境
+venv/
+env/
+
+# 数据库文件
+*.db
+
+# 日志文件
+*.log
+
+# 环境变量文件
+.env
+
+# Python 编译文件
+__pycache__/
+*.pyc
+
+# Node.js 依赖
+node_modules/
+
+# 构建文件
+dist/
+build/
+
+# IDE 配置
+.vscode/
+.idea/
+
+# 操作系统文件
+Thumbs.db
+.DS_Store
+
+# 临时文件
+*.tmp
+*.temp
+
+# 包管理文件
+*.egg-info/
+
+# 测试输出
+.pytest_cache/
+
+# 覆盖率报告
+coverage/
+
+# 类型检查
+.mypy_cache/
