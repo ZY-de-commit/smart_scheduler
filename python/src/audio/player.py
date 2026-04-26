@@ -28,7 +28,6 @@ class AudioPlayer:
     def __init__(self, config: Dict[str, Any] = None):
         self.config = config or {}
         self._tts_engine = None
-        self._pygame_initialized = False
         self._current_process = None
         self._lock = threading.Lock()
         self._is_playing = False
@@ -214,23 +213,11 @@ class AudioPlayer:
     
     def _play_audio_windows(self, file_path: str, blocking: bool) -> bool:
         try:
-            import pygame
+            from playsound import playsound
             
             with self._lock:
-                if not self._pygame_initialized:
-                    pygame.mixer.init()
-                    self._pygame_initialized = True
-                
-                pygame.mixer.music.load(file_path)
-                pygame.mixer.music.set_volume(self.volume)
-                
                 self._is_playing = True
-                pygame.mixer.music.play()
-                
-                if blocking:
-                    while pygame.mixer.music.get_busy():
-                        pygame.time.Clock().tick(10)
-                
+                playsound(file_path, block=blocking)
                 self._is_playing = False
                 return True
                 
@@ -305,13 +292,6 @@ class AudioPlayer:
                 except Exception:
                     pass
             
-            try:
-                import pygame
-                if pygame.mixer.get_init():
-                    pygame.mixer.music.stop()
-            except Exception:
-                pass
-            
             self._is_playing = False
             logger.info("Audio stopped")
     
@@ -350,21 +330,6 @@ class AudioPlayer:
                     is_default=i == 0,
                     is_bluetooth='bluetooth' in voice.name.lower(),
                     description=f"Language: {voice.language}"
-                ))
-        except Exception:
-            pass
-        
-        try:
-            import pygame
-            if not pygame.mixer.get_init():
-                pygame.mixer.init()
-            
-            for i in range(pygame.mixer.get_num_channels()):
-                devices.append(AudioDevice(
-                    id=f"pygame_{i}",
-                    name=f"Audio Channel {i}",
-                    is_default=i == 0,
-                    is_bluetooth=False
                 ))
         except Exception:
             pass
