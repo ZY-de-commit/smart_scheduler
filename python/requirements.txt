@@ -1,0 +1,17 @@
+flask==3.0.0
+flask-cors==4.0.0
+flask-socketio==5.3.6
+apscheduler==3.10.4
+requests==2.31.0
+openai==1.6.1
+anthropic==0.19.1
+python-dotenv==1.0.0
+sqlalchemy==2.0.23
+pydantic==2.5.2
+pydantic-settings==2.1.0
+pyttsx3==2.90
+playsound==1.2.2
+pygame==2.5.2
+bleak==0.21.1
+websockets==12.0
+eventlet==0.34.1
