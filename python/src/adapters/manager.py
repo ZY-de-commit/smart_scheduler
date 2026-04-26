@@ -1,140 +1,175 @@
 """
-适配器管理器
-管理所有注册的适配器，提供统一的调用接口
+适配器管理模块
 """
 
-import importlib
 import logging
-import os
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Type
-
-from .base import BaseAdapter, ContentItem
+from typing import Dict, Any, List, Optional
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
 
-class AdapterManager:
-    def __init__(self):
-        self._adapters: Dict[str, BaseAdapter] = {}
-        self._adapter_classes: Dict[str, Type[BaseAdapter]] = {}
-        self._adapter_configs: Dict[str, Dict[str, Any]] = {}
+@dataclass
+class ContentItem:
+    """内容项"""
+    id: str
+    title: str
+    content: str
+    source: str
+    url: str = ""
+    timestamp: float = 0.0
+    metadata: Dict[str, Any] = None
     
-    def register_adapter_class(self, name: str, adapter_class: Type[BaseAdapter]):
-        self._adapter_classes[name] = adapter_class
-        logger.info(f"Registered adapter class: {name}")
+    def __post_init__(self):
+        if self.metadata is None:
+            self.metadata = {}
+
+
+class BaseAdapter(ABC):
+    """适配器基类"""
     
-    def get_adapter_class(self, name: str) -> Optional[Type[BaseAdapter]]:
-        return self._adapter_classes.get(name)
+    name: str = "base"
+    display_name: str = "基础适配器"
+    description: str = "适配器基类"
+    version: str = "1.0.0"
     
-    def create_adapter(self, name: str, config: Dict[str, Any] = None) -> Optional[BaseAdapter]:
-        adapter_class = self.get_adapter_class(name)
-        if not adapter_class:
-            logger.error(f"Adapter class not found: {name}")
-            return None
+    requires_auth: bool = False
+    supported_time_ranges: List[str] = ['1d', '7d', '30d']
+    content_type: str = "general"
+    
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config or {}
+        self._is_initialized = False
+    
+    @abstractmethod
+    def initialize(self) -> bool:
+        """初始化适配器"""
+        pass
+    
+    @abstractmethod
+    def is_available(self) -> bool:
+        """检查适配器是否可用"""
+        pass
+    
+    @abstractmethod
+    def fetch_data(self, time_range: str) -> List[ContentItem]:
+        """获取数据"""
+        pass
+    
+    def get_config_schema(self) -> Dict[str, Any]:
+        """获取配置 schema"""
+        return {}
+    
+    def get_display_info(self) -> Dict[str, Any]:
+        """获取显示信息"""
+        return {
+            'name': self.name,
+            'display_name': self.display_name,
+            'description': self.description,
+            'version': self.version,
+            'requires_auth': self.requires_auth,
+            'supported_time_ranges': self.supported_time_ranges,
+            'content_type': self.content_type
+        }
+
+
+class MockAdapter(BaseAdapter):
+    """模拟适配器"""
+    
+    name = "mock"
+    display_name = "模拟适配器"
+    description = "用于测试的模拟适配器"
+    
+    def initialize(self) -> bool:
+        self._is_initialized = True
+        return True
+    
+    def is_available(self) -> bool:
+        return self._is_initialized
+    
+    def fetch_data(self, time_range: str) -> List[ContentItem]:
+        """模拟数据"""
+        import time
+        current_time = time.time()
         
-        try:
-            config = config or self._adapter_configs.get(name, {})
-            adapter = adapter_class(config)
-            
-            if adapter.initialize():
-                self._adapters[name] = adapter
-                logger.info(f"Created and initialized adapter: {name}")
-                return adapter
-            else:
-                logger.warning(f"Failed to initialize adapter: {name}")
-                return None
-                
-        except Exception as e:
-            logger.error(f"Error creating adapter {name}: {e}")
-            return None
+        items = []
+        for i in range(5):
+            items.append(ContentItem(
+                id=f"mock_{i}",
+                title=f"测试标题 {i}",
+                content=f"这是测试内容 {i}，用于模拟数据获取。",
+                source="Mock Adapter",
+                url=f"http://example.com/{i}",
+                timestamp=current_time - i * 3600,
+                metadata={"category": "test"}
+            ))
+        
+        return items
+
+
+class AdapterManager:
+    """适配器管理器"""
+    
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.adapters: Dict[str, BaseAdapter] = {}
+        self._init_adapters()
+    
+    def _init_adapters(self):
+        """初始化适配器"""
+        # 注册内置适配器
+        self.adapters['mock'] = MockAdapter({})
+        
+        # 可以在这里添加更多适配器
+        # 例如：
+        # self.adapters['netease'] = NeteaseMusicAdapter(self.config.get('adapters', {}).get('netease', {}))
+        # self.adapters['wechat'] = WeChatAdapter(self.config.get('adapters', {}).get('wechat', {}))
+        
+        # 初始化所有适配器
+        for name, adapter in self.adapters.items():
+            try:
+                success = adapter.initialize()
+                if success:
+                    logger.info(f"Initialized adapter: {name}")
+                else:
+                    logger.warning(f"Failed to initialize adapter: {name}")
+            except Exception as e:
+                logger.error(f"Error initializing adapter {name}: {e}")
+        
+        logger.info(f"Initialized {len(self.adapters)} adapters")
     
     def get_adapter(self, name: str) -> Optional[BaseAdapter]:
-        if name in self._adapters:
-            return self._adapters[name]
-        
-        return self.create_adapter(name)
+        """获取适配器"""
+        return self.adapters.get(name)
     
-    def list_available_adapters(self) -> List[Dict[str, Any]]:
-        result = []
-        
-        for name, adapter_class in self._adapter_classes.items():
-            is_registered = name in self._adapters
-            is_available = False
-            
-            if is_registered:
-                is_available = self._adapters[name].is_available()
-            
-            temp_adapter = adapter_class(self._adapter_configs.get(name, {}))
-            
-            result.append({
-                'name': name,
-                'display_name': temp_adapter.display_name,
-                'description': temp_adapter.description,
-                'version': temp_adapter.version,
-                'requires_auth': temp_adapter.requires_auth,
-                'supported_time_ranges': temp_adapter.supported_time_ranges,
-                'content_type': temp_adapter.content_type,
-                'config_schema': temp_adapter.get_config_schema(),
-                'is_registered': is_registered,
-                'is_available': is_available
-            })
-        
-        return result
+    def get_adapters(self) -> Dict[str, BaseAdapter]:
+        """获取所有适配器"""
+        return self.adapters
     
-    def fetch_data(self, adapter_name: str, time_range: str) -> List[ContentItem]:
-        adapter = self.get_adapter(adapter_name)
-        
-        if not adapter:
-            raise ValueError(f"Adapter not found: {adapter_name}")
-        
-        if not adapter.is_available():
-            raise RuntimeError(f"Adapter {adapter_name} is not available")
-        
-        return adapter.fetch_data(time_range)
+    def get_available_adapters(self) -> List[Dict[str, Any]]:
+        """获取可用的适配器信息"""
+        available = []
+        for name, adapter in self.adapters.items():
+            if adapter.is_available():
+                info = adapter.get_display_info()
+                available.append(info)
+        return available
     
-    def set_config(self, adapter_name: str, config: Dict[str, Any]):
-        self._adapter_configs[adapter_name] = config
-        
-        if adapter_name in self._adapters:
-            del self._adapters[adapter_name]
-        
-        logger.info(f"Updated config for adapter: {adapter_name}")
-    
-    def get_config(self, adapter_name: str) -> Dict[str, Any]:
-        return self._adapter_configs.get(adapter_name, {})
-    
-    def load_adapters(self, adapters_dir: str = None):
-        if adapters_dir is None:
-            adapters_dir = str(Path(__file__).parent)
-        
-        adapters_path = Path(adapters_dir)
-        
-        for item in adapters_path.iterdir():
-            if item.is_dir() and not item.name.startswith('__'):
-                self._load_adapter_module(item.name)
-        
-        logger.info(f"Loaded {len(self._adapter_classes)} adapter classes")
-    
-    def _load_adapter_module(self, module_name: str):
+    def add_adapter(self, name: str, adapter: BaseAdapter):
+        """添加适配器"""
+        self.adapters[name] = adapter
         try:
-            module_path = f"{__package__}.{module_name}"
-            module = importlib.import_module(module_path)
-            
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if (isinstance(attr, type) and 
-                    issubclass(attr, BaseAdapter) and 
-                    attr != BaseAdapter):
-                    
-                    adapter_name = getattr(attr, 'name', attr_name.lower())
-                    self.register_adapter_class(adapter_name, attr)
-                    logger.info(f"Found adapter class: {adapter_name}")
-                    
+            success = adapter.initialize()
+            if success:
+                logger.info(f"Added and initialized adapter: {name}")
+            else:
+                logger.warning(f"Added adapter {name} but failed to initialize")
         except Exception as e:
-            logger.warning(f"Failed to load adapter module {module_name}: {e}")
+            logger.error(f"Error adding adapter {name}: {e}")
     
-    def initialize_all(self):
-        for name in self._adapter_classes:
-            if name not in self._adapters:
-                self.create_adapter(name)
+    def remove_adapter(self, name: str):
+        """移除适配器"""
+        if name in self.adapters:
+            del self.adapters[name]
+            logger.info(f"Removed adapter: {name}")

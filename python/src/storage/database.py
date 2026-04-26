@@ -75,20 +75,35 @@ class AdapterConfig(Base):
 
 
 class Database:
-    def __init__(self, db_path: Optional[str] = None):
-        if db_path is None:
-            app_data = Path.home() / ".smart-scheduler"
-            app_data.mkdir(parents=True, exist_ok=True)
-            db_path = str(app_data / "app.db")
+    def __init__(self, config: Optional[Dict[str, Any]] = None):
+        config = config or {}
+        db_config = config.get('database', {})
         
-        self.db_path = db_path
-        self.engine = create_engine(f'sqlite:///{db_path}', echo=False)
+        if db_config.get('type') == 'sqlite':
+            db_path = db_config.get('path')
+            if db_path is None:
+                app_data = Path.home() / ".smart-scheduler"
+                app_data.mkdir(parents=True, exist_ok=True)
+                db_path = str(app_data / "app.db")
+            
+            self.db_path = db_path
+            self.engine = create_engine(f'sqlite:///{db_path}', echo=False)
+        else:
+            # 支持其他数据库类型
+            db_url = db_config.get('url')
+            if not db_url:
+                raise ValueError("Database URL is required")
+            self.engine = create_engine(db_url, echo=False)
+        
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self._session: Optional[Session] = None
+        
+        # 自动初始化
+        self.initialize()
     
     def initialize(self):
         Base.metadata.create_all(bind=self.engine)
-        logger.info(f"Database initialized at {self.db_path}")
+        logger.info(f"Database initialized at {self.db_path if hasattr(self, 'db_path') else 'custom URL'}")
     
     def get_session(self) -> Session:
         if self._session is None:

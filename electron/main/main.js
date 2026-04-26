@@ -1,137 +1,76 @@
-const { app, BrowserWindow, Tray, Menu, nativeImage, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
+const { spawn } = require('child_process');
+const { kill } = require('tree-kill');
 const isDev = require('electron-is-dev');
 
-const { createTray, updateTrayMenu } = require('./tray');
-const { startPythonServer, stopPythonServer, sendToPython } = require('./pythonBridge');
-const { registerIpcHandlers } = require('./ipc');
-
-let mainWindow = null;
-let tray = null;
-let isQuitting = false;
-
-const PYTHON_PORT = process.env.PYTHON_PORT || 5000;
-const PYTHON_HOST = '127.0.0.1';
+let mainWindow;
+let pythonProcess;
 
 function createWindow() {
-    mainWindow = new BrowserWindow({
-        width: 1200,
-        height: 800,
-        minWidth: 900,
-        minHeight: 600,
-        webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            preload: path.join(__dirname, 'preload.js'),
-            sandbox: false
-        },
-        icon: path.join(__dirname, '../../shared/icons/icon.png'),
-        show: false,
-        frame: true,
-        titleBarStyle: 'default',
-        backgroundColor: '#1a1a2e'
-    });
+  mainWindow = new BrowserWindow({
+    width: 1200,
+    height: 800,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
 
-    const startUrl = isDev
-        ? 'http://localhost:3000'
-        : `file://${path.join(__dirname, '../renderer/dist/index.html')}`;
+  const indexPath = isDev
+    ? 'http://localhost:5173'
+    : `file://${path.join(__dirname, '../renderer/dist/index.html')}`;
 
-    mainWindow.loadURL(startUrl);
+  mainWindow.loadURL(indexPath);
 
-    mainWindow.once('ready-to-show', () => {
-        mainWindow.show();
-    });
-
-    mainWindow.on('close', (event) => {
-        if (!isQuitting) {
-            event.preventDefault();
-            mainWindow.hide();
-        }
-    });
-
-    mainWindow.on('closed', () => {
-        mainWindow = null;
-    });
-
-    if (isDev) {
-        mainWindow.webContents.openDevTools();
-    }
+  mainWindow.on('closed', () => {
+    mainWindow = null;
+  });
 }
 
-function showMainWindow() {
-    if (mainWindow) {
-        if (mainWindow.isMinimized()) {
-            mainWindow.restore();
-        }
-        mainWindow.show();
-        mainWindow.focus();
-    }
+function startPythonServer() {
+  const pythonExecutable = process.platform === 'win32' ? 'python' : 'python3';
+  const pythonPath = path.join(__dirname, '../../python/src/main.py');
+  
+  pythonProcess = spawn(pythonExecutable, [pythonPath], {
+    cwd: path.join(__dirname, '../../python'),
+    stdio: 'inherit'
+  });
+
+  pythonProcess.on('error', (error) => {
+    console.error('Failed to start Python server:', error);
+  });
+
+  pythonProcess.on('exit', (code) => {
+    console.log(`Python server exited with code ${code}`);
+  });
 }
 
-function quitApp() {
-    isQuitting = true;
-    
-    stopPythonServer();
-    
-    if (mainWindow) {
-        mainWindow.close();
-    }
-    
-    if (tray) {
-        tray.destroy();
-    }
-    
-    app.quit();
+function stopPythonServer() {
+  if (pythonProcess) {
+    kill(pythonProcess.pid);
+    pythonProcess = null;
+  }
 }
 
-app.whenReady().then(async () => {
-    try {
-        await startPythonServer();
-    } catch (error) {
-        console.error('Failed to start Python server:', error);
-        dialog.showErrorBox(
-            '启动失败',
-            `无法启动 Python 服务: ${error.message}\n\n请确保已安装 Python 依赖。`
-        );
-    }
-
-    createWindow();
-    
-    tray = createTray(showMainWindow, quitApp);
-    
-    registerIpcHandlers(mainWindow, tray);
-
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) {
-            createWindow();
-        } else {
-            showMainWindow();
-        }
-    });
+app.on('ready', () => {
+  startPythonServer();
+  createWindow();
 });
 
 app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        quitApp();
-    }
+  stopPythonServer();
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });
 
-app.on('before-quit', () => {
-    isQuitting = true;
+app.on('activate', () => {
+  if (mainWindow === null) {
+    createWindow();
+  }
 });
 
-process.on('SIGTERM', () => {
-    quitApp();
+ipcMain.on('open-external', (event, url) => {
+  shell.openExternal(url);
 });
-
-process.on('SIGINT', () => {
-    quitApp();
-});
-
-module.exports = {
-    mainWindow,
-    showMainWindow,
-    quitApp,
-    PYTHON_HOST,
-    PYTHON_PORT
-};
