@@ -35,8 +35,10 @@ from src.adapters.manager import AdapterManager
 from src.audio.player import AudioPlayer
 from src.api.routes import register_routes
 
-# 加载环境变量
-load_dotenv()
+# 加载环境变量 - 指定 .env 文件路径
+dotenv_path = Path(__file__).parent.parent / '.env'
+logger.info(f"Loading .env from: {dotenv_path}")
+load_dotenv(dotenv_path=dotenv_path)
 
 # 创建 Flask 应用
 app = Flask(__name__)
