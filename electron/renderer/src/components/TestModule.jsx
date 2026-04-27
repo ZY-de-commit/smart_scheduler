@@ -4,7 +4,7 @@ import {
   Space, Divider, Collapse, Descriptions, Tag, Spin
 } from 'antd';
 import {
-  TestOutlined, DatabaseOutlined, RobotOutlined,
+  ExperimentOutlined, DatabaseOutlined, RobotOutlined,
   CheckCircleOutlined, CloseCircleOutlined, LoadingOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
@@ -222,7 +222,7 @@ function TestModule() {
               <Button
                 type="primary"
                 htmlType="submit"
-                icon={<TestOutlined />}
+                icon={<ExperimentOutlined />}
                 loading={loading}
                 block
               >
@@ -258,7 +258,7 @@ function TestModule() {
               <Button
                 type="primary"
                 htmlType="submit"
-                icon={<TestOutlined />}
+                icon={<ExperimentOutlined />}
                 loading={loading}
                 block
               >
