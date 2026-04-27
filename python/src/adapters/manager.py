@@ -121,6 +121,10 @@ class AdapterManager:
         # 注册内置适配器
         self.adapters['mock'] = MockAdapter({})
         
+        # 添加 Obsidian 适配器
+        from .obsidian import ObsidianAdapter
+        self.adapters['obsidian'] = ObsidianAdapter(self.config.get('adapters', {}).get('obsidian', {}))
+        
         # 可以在这里添加更多适配器
         # 例如：
         # self.adapters['netease'] = NeteaseMusicAdapter(self.config.get('adapters', {}).get('netease', {}))
