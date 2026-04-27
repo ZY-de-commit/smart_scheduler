@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   Card, Button, Form, Input, Select, message, List, Typography,
-  Modal, Switch, Space, Popconfirm, Tag, Divider
+  Modal, Switch, Space, Popconfirm, Tag, Divider, Radio
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined,
-  CloseCircleOutlined, SettingOutlined, ExperimentOutlined
+  CloseCircleOutlined, SettingOutlined, ExperimentOutlined, ImportOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 
@@ -13,46 +13,98 @@ const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 const { TextArea, Password } = Input;
 
+const DEFAULT_PROVIDER_TYPES = [
+  {
+    type: 'openai',
+    display_name: 'OpenAI 兼容',
+    description: '支持 OpenAI API 格式的提供商，包括云雾AI等',
+    config_schema: {
+      api_key: { type: 'string', required: true, title: 'API 密钥', description: 'API 访问密钥' },
+      model: { type: 'string', required: true, title: '模型名称', description: '要使用的模型名称，如 gpt-4, claude-3 等' },
+      base_url: { type: 'string', required: false, title: 'API 地址', description: '自定义 API 地址（可选）' }
+    }
+  },
+  {
+    type: 'yunwu',
+    display_name: '云雾 AI',
+    description: '云雾 AI 服务（OpenAI 兼容格式）',
+    config_schema: {
+      api_key: { type: 'string', required: true, title: 'API 密钥', description: '云雾 AI 的 API 密钥' },
+      model: { type: 'string', required: true, title: '模型名称', description: '要使用的模型名称' },
+      base_url: { type: 'string', required: false, title: 'API 地址', description: '自定义 API 地址，默认 https://api.yunwu.ai/v1', default: 'https://api.yunwu.ai/v1' }
+    }
+  },
+  {
+    type: 'anthropic',
+    display_name: 'Anthropic Claude',
+    description: 'Anthropic Claude 系列模型',
+    config_schema: {
+      api_key: { type: 'string', required: true, title: 'API 密钥', description: 'Anthropic API 密钥' },
+      model: { type: 'string', required: true, title: '模型名称', description: 'Claude 模型名称，如 claude-3-sonnet-20240229' }
+    }
+  },
+  {
+    type: 'ollama',
+    display_name: 'Ollama 本地模型',
+    description: '本地运行的 Ollama 模型',
+    config_schema: {
+      model: { type: 'string', required: true, title: '模型名称', description: 'Ollama 模型名称，如 llama2, mistral 等' },
+      base_url: { type: 'string', required: false, title: 'API 地址', description: 'Ollama 服务地址，默认 http://localhost:11434', default: 'http://localhost:11434' }
+    }
+  }
+];
+
 function AIConfigManager() {
   const [configs, setConfigs] = useState([]);
-  const [providerTypes, setProviderTypes] = useState([]);
+  const [providerTypes, setProviderTypes] = useState(DEFAULT_PROVIDER_TYPES);
+  const [initialConfigs, setInitialConfigs] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [importModalVisible, setImportModalVisible] = useState(false);
   const [editingConfig, setEditingConfig] = useState(null);
+  const [selectedImportConfig, setSelectedImportConfig] = useState(null);
   const [form] = Form.useForm();
   const [selectedProviderType, setSelectedProviderType] = useState(null);
   const [testLoading, setTestLoading] = useState(false);
 
-  // 获取所有 AI 配置
   const fetchConfigs = async () => {
     setLoading(true);
     try {
       const response = await axios.get('http://localhost:5000/api/ai/configs');
       setConfigs(response.data.configs || []);
     } catch (error) {
-      message.error('获取 AI 配置列表失败');
       console.error('Error fetching AI configs:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // 获取提供商类型
   const fetchProviderTypes = async () => {
     try {
       const response = await axios.get('http://localhost:5000/api/ai/provider-types');
-      setProviderTypes(response.data.provider_types || []);
+      if (response.data.provider_types && response.data.provider_types.length > 0) {
+        setProviderTypes(response.data.provider_types);
+      }
     } catch (error) {
       console.error('Error fetching provider types:', error);
+    }
+  };
+
+  const fetchInitialConfigs = async () => {
+    try {
+      const response = await axios.get('http://localhost:5000/api/ai/initial-config');
+      setInitialConfigs(response.data.initial_configs || []);
+    } catch (error) {
+      console.error('Error fetching initial configs:', error);
     }
   };
 
   useEffect(() => {
     fetchConfigs();
     fetchProviderTypes();
+    fetchInitialConfigs();
   }, []);
 
-  // 打开新建/编辑模态框
   const openModal = (config = null) => {
     setEditingConfig(config);
     if (config) {
@@ -72,7 +124,6 @@ function AIConfigManager() {
     setModalVisible(true);
   };
 
-  // 关闭模态框
   const closeModal = () => {
     setModalVisible(false);
     setEditingConfig(null);
@@ -80,12 +131,20 @@ function AIConfigManager() {
     setSelectedProviderType(null);
   };
 
-  // 提供商类型变化
+  const openImportModal = () => {
+    setSelectedImportConfig(null);
+    setImportModalVisible(true);
+  };
+
+  const closeImportModal = () => {
+    setImportModalVisible(false);
+    setSelectedImportConfig(null);
+  };
+
   const handleProviderTypeChange = (value) => {
     setSelectedProviderType(value);
   };
 
-  // 测试连接
   const testConnection = async () => {
     try {
       const values = await form.validateFields();
@@ -115,7 +174,6 @@ function AIConfigManager() {
     }
   };
 
-  // 保存配置
   const saveConfig = async (values) => {
     setLoading(true);
     try {
@@ -147,7 +205,6 @@ function AIConfigManager() {
     }
   };
 
-  // 删除配置
   const deleteConfig = async (configName) => {
     try {
       await axios.delete(`http://localhost:5000/api/ai/configs/${configName}`);
@@ -159,7 +216,6 @@ function AIConfigManager() {
     }
   };
 
-  // 设置默认配置
   const setDefaultConfig = async (configName) => {
     try {
       await axios.post(`http://localhost:5000/api/ai/configs/${configName}/default`);
@@ -171,7 +227,33 @@ function AIConfigManager() {
     }
   };
 
-  // 获取当前选中的提供商类型的 schema
+  const importInitialConfig = async () => {
+    if (!selectedImportConfig) {
+      message.warning('请选择要导入的配置');
+      return;
+    }
+
+    try {
+      const data = {
+        name: selectedImportConfig.name,
+        display_name: selectedImportConfig.display_name,
+        provider_type: selectedImportConfig.provider_type,
+        config: selectedImportConfig.config,
+        is_default: configs.length === 0,
+        enabled: true
+      };
+      
+      await axios.post('http://localhost:5000/api/ai/configs', data);
+      
+      message.success('配置导入成功');
+      closeImportModal();
+      fetchConfigs();
+    } catch (error) {
+      message.error('导入配置失败');
+      console.error('Error importing config:', error);
+    }
+  };
+
   const getCurrentProviderSchema = () => {
     if (!selectedProviderType) return null;
     const provider = providerTypes.find(p => p.type === selectedProviderType);
@@ -180,20 +262,54 @@ function AIConfigManager() {
 
   const currentSchema = getCurrentProviderSchema();
 
+  const hasDefaultConfig = configs.some(c => c.is_default);
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
         <Title level={4}>AI 配置管理</Title>
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
-          新建配置
-        </Button>
+        <Space>
+          {initialConfigs.length > 0 && (
+            <Button icon={<ImportOutlined />} onClick={openImportModal}>
+              导入初始配置
+            </Button>
+          )}
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
+            新建配置
+          </Button>
+        </Space>
       </div>
+
+      {!hasDefaultConfig && configs.length > 0 && (
+        <Card style={{ marginBottom: 24, background: '#fffbe6', borderColor: '#ffe58f' }}>
+          <Text type="warning">⚠️ 尚未设置默认配置，请选择一个配置设为默认。</Text>
+        </Card>
+      )}
 
       <List
         loading={loading}
         grid={{ gutter: 16, column: 1 }}
         dataSource={configs}
-        locale={{ emptyText: '暂无 AI 配置，请点击"新建配置"添加' }}
+        locale={{ 
+          emptyText: (
+            <div style={{ textAlign: 'center', padding: '40px 0' }}>
+              <SettingOutlined style={{ fontSize: 48, color: '#ccc' }} />
+              <Paragraph style={{ marginTop: 16, color: '#999' }}>
+                暂无 AI 配置
+              </Paragraph>
+              <Space>
+                {initialConfigs.length > 0 && (
+                  <Button icon={<ImportOutlined />} onClick={openImportModal}>
+                    从初始配置导入
+                  </Button>
+                )}
+                <Button type="primary" icon={<PlusOutlined />} onClick={() => openModal()}>
+                  新建配置
+                </Button>
+              </Space>
+            </div>
+          )
+        }}
         renderItem={config => (
           <List.Item>
             <Card>
@@ -222,6 +338,12 @@ function AIConfigManager() {
                     <Text type="secondary">模型: </Text>
                     <Text>{config.config?.model || '未设置'}</Text>
                   </div>
+                  {config.config?.base_url && (
+                    <div style={{ marginTop: 8 }}>
+                      <Text type="secondary">API 地址: </Text>
+                      <Text copyable>{config.config.base_url}</Text>
+                    </div>
+                  )}
                 </div>
                 <Space>
                   {!config.is_default && (
@@ -260,9 +382,8 @@ function AIConfigManager() {
         )}
       />
 
-      {/* 新建/编辑配置模态框 */}
       <Modal
-        title={editingConfig ? '编辑 AI 配置' : '新建 AI 配置'}
+        title="新建/编辑 AI 配置"
         open={modalVisible}
         onCancel={closeModal}
         width={600}
@@ -305,33 +426,36 @@ function AIConfigManager() {
             </Select>
           </Form.Item>
 
-          {currentSchema && (
+          {selectedProviderType && (
             <>
               <Divider>连接配置</Divider>
               
-              {currentSchema.api_key && (
+              {currentSchema?.api_key && (
                 <Form.Item
                   name="api_key"
                   label={currentSchema.api_key.title}
                   rules={currentSchema.api_key.required ? [{ required: true, message: `请输入${currentSchema.api_key.title}` }] : []}
                   extra={currentSchema.api_key.description}
                 >
-                  <Password placeholder={`请输入${currentSchema.api_key.title}`} />
+                  <Password 
+                    placeholder={`请输入${currentSchema.api_key.title}`}
+                    visibilityToggle={true}
+                  />
                 </Form.Item>
               )}
 
-              {currentSchema.model && (
+              {currentSchema?.model && (
                 <Form.Item
                   name="model"
                   label={currentSchema.model.title}
                   rules={currentSchema.model.required ? [{ required: true, message: `请输入${currentSchema.model.title}` }] : []}
                   extra={currentSchema.model.description}
                 >
-                  <Input placeholder={`例如: ${currentSchema.model.type === 'string' ? 'gpt-4' : 'llama2'}`} />
+                  <Input placeholder="例如: gpt-4, claude-3-sonnet-20240229, llama2" />
                 </Form.Item>
               )}
 
-              {currentSchema.base_url && (
+              {currentSchema?.base_url && (
                 <Form.Item
                   name="base_url"
                   label={currentSchema.base_url.title}
@@ -350,6 +474,7 @@ function AIConfigManager() {
             name="is_default"
             label="设为默认配置"
             valuePropName="checked"
+            extra="默认配置将被优先使用"
           >
             <Switch />
           </Form.Item>
@@ -383,6 +508,52 @@ function AIConfigManager() {
             </Space>
           </Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title="导入初始配置"
+        open={importModalVisible}
+        onCancel={closeImportModal}
+        footer={[
+          <Button key="cancel" onClick={closeImportModal}>
+            取消
+          </Button>,
+          <Button key="import" type="primary" onClick={importInitialConfig}>
+            导入
+          </Button>
+        ]}
+      >
+        <Radio.Group
+          onChange={(e) => setSelectedImportConfig(e.target.value)}
+          value={selectedImportConfig}
+          style={{ width: '100%' }}
+        >
+          <List
+            dataSource={initialConfigs}
+            renderItem={config => (
+              <List.Item>
+                <Radio value={config} style={{ width: '100%' }}>
+                  <Card size="small" style={{ marginLeft: 8, display: 'inline-block', width: 'calc(100% - 32px)' }}>
+                    <div>
+                      <Text strong>{config.display_name}</Text>
+                      <Tag style={{ marginLeft: 8 }}>{config.provider_type}</Tag>
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <Text type="secondary">模型: </Text>
+                      <Text>{config.config?.model || '未设置'}</Text>
+                    </div>
+                    {config.config?.base_url && (
+                      <div style={{ marginTop: 4 }}>
+                        <Text type="secondary">API 地址: </Text>
+                        <Text>{config.config.base_url}</Text>
+                      </div>
+                    )}
+                  </Card>
+                </Radio>
+              </List.Item>
+            )}
+          />
+        </Radio.Group>
       </Modal>
     </div>
   );
