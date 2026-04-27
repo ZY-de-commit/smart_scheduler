@@ -155,9 +155,8 @@ class AdapterManager:
         """获取可用的适配器信息"""
         available = []
         for name, adapter in self.adapters.items():
-            if adapter.is_available():
-                info = adapter.get_display_info()
-                available.append(info)
+            info = adapter.get_display_info()
+            available.append(info)
         return available
     
     def add_adapter(self, name: str, adapter: BaseAdapter):
