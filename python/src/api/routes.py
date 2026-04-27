@@ -420,6 +420,74 @@ def register_routes(app, socketio: SocketIO, db, scheduler, ai_manager, adapter_
             logger.error(f"Error processing with adapter and AI: {e}")
             return jsonify({'success': False, 'error': str(e)}), 500
     
+    # 获取初始配置（从 .env 或环境变量）
+    @app.route('/api/ai/initial-config', methods=['GET'])
+    def get_initial_config():
+        """获取初始配置（从环境变量读取）"""
+        from src.config.config import get_config
+        config = get_config()
+        ai_config = config.get('ai', {})
+        
+        initial_configs = []
+        
+        # 检查 OpenAI 配置
+        openai_config = ai_config.get('openai', {})
+        if openai_config.get('api_key'):
+            initial_configs.append({
+                'name': 'openai_initial',
+                'display_name': 'OpenAI (初始配置)',
+                'provider_type': 'openai',
+                'config': {
+                    'api_key': openai_config.get('api_key', ''),
+                    'model': openai_config.get('model', 'gpt-3.5-turbo'),
+                    'base_url': openai_config.get('base_url', '')
+                }
+            })
+        
+        # 检查云雾 AI 配置
+        yunwu_config = ai_config.get('yunwu', {})
+        if yunwu_config.get('api_key'):
+            initial_configs.append({
+                'name': 'yunwu_initial',
+                'display_name': '云雾 AI (初始配置)',
+                'provider_type': 'yunwu',
+                'config': {
+                    'api_key': yunwu_config.get('api_key', ''),
+                    'model': yunwu_config.get('model', 'gpt-4'),
+                    'base_url': yunwu_config.get('base_url', 'https://api.yunwu.ai/v1')
+                }
+            })
+        
+        # 检查 Anthropic 配置
+        anthropic_config = ai_config.get('anthropic', {})
+        if anthropic_config.get('api_key'):
+            initial_configs.append({
+                'name': 'anthropic_initial',
+                'display_name': 'Anthropic Claude (初始配置)',
+                'provider_type': 'anthropic',
+                'config': {
+                    'api_key': anthropic_config.get('api_key', ''),
+                    'model': anthropic_config.get('model', 'claude-3-sonnet-20240229')
+                }
+            })
+        
+        # 检查 Ollama 配置
+        ollama_config = ai_config.get('ollama', {})
+        initial_configs.append({
+            'name': 'ollama_initial',
+            'display_name': 'Ollama (初始配置)',
+            'provider_type': 'ollama',
+            'config': {
+                'model': ollama_config.get('model', 'llama2'),
+                'base_url': ollama_config.get('base_url', 'http://localhost:11434')
+            }
+        })
+        
+        return jsonify({
+            'initial_configs': initial_configs,
+            'current_provider': ai_config.get('provider', 'yunwu')
+        })
+    
     # 获取所有可用的提供商类型
     @app.route('/api/ai/provider-types', methods=['GET'])
     def get_provider_types():
