@@ -5,7 +5,7 @@ import {
 } from 'antd';
 import {
   PlusOutlined, EditOutlined, DeleteOutlined, CheckCircleOutlined,
-  CloseCircleOutlined, SettingOutlined, TestOutlined
+  CloseCircleOutlined, SettingOutlined, ExperimentOutlined
 } from '@ant-design/icons';
 import axios from 'axios';
 
@@ -370,7 +370,7 @@ function AIConfigManager() {
               </Button>
               {selectedProviderType && (
                 <Button 
-                  icon={<TestOutlined />} 
+                  icon={<ExperimentOutlined />} 
                   onClick={testConnection}
                   loading={testLoading}
                 >
