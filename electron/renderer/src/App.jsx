@@ -3,6 +3,9 @@ import { Layout, Menu, Typography, Card, Button, message } from 'antd';
 import { BrowserRouter as Router, Routes, Route, Link, useLocation } from 'react-router-dom';
 import axios from 'axios';
 import AdapterManager from './components/AdapterManager';
+import AIConfigManager from './components/AIConfigManager';
+import TestModule from './components/TestModule';
+import CombinedProcessor from './components/CombinedProcessor';
 
 const { Header, Content, Sider } = Layout;
 const { Title, Text } = Typography;
@@ -114,14 +117,14 @@ function TaskManager() {
   );
 }
 
-// AI 配置组件
-function AIConfig() {
-  return (
-    <div>
-      <Title level={4}>AI 配置</Title>
-      <Text>AI 配置功能开发中...</Text>
-    </div>
-  );
+// 测试模块组件
+function TestModulePage() {
+  return <TestModule />;
+}
+
+// 组合处理组件
+function CombinedProcessorPage() {
+  return <CombinedProcessor />;
 }
 
 // 音频设置组件
@@ -171,6 +174,12 @@ function App() {
               <Menu.Item key="ai">
                 <Link to="/ai">AI 配置</Link>
               </Menu.Item>
+              <Menu.Item key="test">
+                <Link to="/test">测试模块</Link>
+              </Menu.Item>
+              <Menu.Item key="combined">
+                <Link to="/combined">组合处理</Link>
+              </Menu.Item>
               <Menu.Item key="audio">
                 <Link to="/audio">音频设置</Link>
               </Menu.Item>
@@ -185,7 +194,9 @@ function App() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/tasks" element={<TaskManager />} />
                 <Route path="/adapters" element={<AdapterManager />} />
-                <Route path="/ai" element={<AIConfig />} />
+                <Route path="/ai" element={<AIConfigManager />} />
+                <Route path="/test" element={<TestModulePage />} />
+                <Route path="/combined" element={<CombinedProcessorPage />} />
                 <Route path="/audio" element={<AudioSettings />} />
                 <Route path="/settings" element={<SystemSettings />} />
               </Routes>

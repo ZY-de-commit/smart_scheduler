@@ -50,11 +50,11 @@ config = get_config()
 db = Database(config)
 scheduler = TaskScheduler()
 try:
-    ai_manager = AIManager(config)
+    ai_manager = AIManager(config, db)
 except Exception as e:
     logger.error(f"Failed to initialize AI manager: {e}")
     from src.ai.manager import AIManager
-    ai_manager = AIManager({})
+    ai_manager = AIManager({}, db)
 adapter_manager = AdapterManager(config)
 audio_player = AudioPlayer(config.get('audio', {}))
 

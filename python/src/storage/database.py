@@ -74,6 +74,20 @@ class AdapterConfig(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class AIConfig(Base):
+    __tablename__ = 'ai_configs'
+    
+    id = Column(String(36), primary_key=True)
+    name = Column(String(100), unique=True, nullable=False)
+    display_name = Column(String(100), nullable=False)
+    provider_type = Column(String(50), nullable=False)
+    config = Column(JSON, default={})
+    is_default = Column(Boolean, default=False)
+    enabled = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class Database:
     def __init__(self, config: Optional[Dict[str, Any]] = None):
         config = config or {}
@@ -270,6 +284,103 @@ class Database:
             'adapter_name': adapter_config.adapter_name,
             'config': adapter_config.config,
             'enabled': adapter_config.enabled
+        }
+    
+    def save_ai_config(self, config_data: Dict[str, Any]) -> str:
+        session = self.get_session()
+        
+        existing = session.query(AIConfig).filter(
+            AIConfig.name == config_data.get('name')
+        ).first()
+        
+        if existing:
+            existing.display_name = config_data.get('display_name', existing.display_name)
+            existing.provider_type = config_data.get('provider_type', existing.provider_type)
+            existing.config = config_data.get('config', existing.config)
+            existing.is_default = config_data.get('is_default', existing.is_default)
+            existing.enabled = config_data.get('enabled', existing.enabled)
+            config_id = existing.id
+        else:
+            config_id = str(uuid4())
+            ai_config = AIConfig(
+                id=config_id,
+                name=config_data.get('name'),
+                display_name=config_data.get('display_name', config_data.get('name')),
+                provider_type=config_data.get('provider_type', 'openai'),
+                config=config_data.get('config', {}),
+                is_default=config_data.get('is_default', False),
+                enabled=config_data.get('enabled', True)
+            )
+            session.add(ai_config)
+        
+        session.commit()
+        logger.info(f"Saved AI config: {config_data.get('name')}")
+        return config_id
+    
+    def get_ai_config(self, config_name: str) -> Optional[Dict[str, Any]]:
+        session = self.get_session()
+        ai_config = session.query(AIConfig).filter(
+            AIConfig.name == config_name
+        ).first()
+        
+        if ai_config is None:
+            return None
+        
+        return self._ai_config_to_dict(ai_config)
+    
+    def get_all_ai_configs(self) -> List[Dict[str, Any]]:
+        session = self.get_session()
+        configs = session.query(AIConfig).order_by(AIConfig.created_at.desc()).all()
+        return [self._ai_config_to_dict(config) for config in configs]
+    
+    def get_default_ai_config(self) -> Optional[Dict[str, Any]]:
+        session = self.get_session()
+        ai_config = session.query(AIConfig).filter(
+            AIConfig.is_default == True,
+            AIConfig.enabled == True
+        ).first()
+        
+        if ai_config is None:
+            return None
+        
+        return self._ai_config_to_dict(ai_config)
+    
+    def delete_ai_config(self, config_name: str):
+        session = self.get_session()
+        ai_config = session.query(AIConfig).filter(
+            AIConfig.name == config_name
+        ).first()
+        
+        if ai_config:
+            session.delete(ai_config)
+            session.commit()
+            logger.info(f"Deleted AI config: {config_name}")
+    
+    def set_default_ai_config(self, config_name: str):
+        session = self.get_session()
+        
+        session.query(AIConfig).update({AIConfig.is_default: False})
+        
+        ai_config = session.query(AIConfig).filter(
+            AIConfig.name == config_name
+        ).first()
+        
+        if ai_config:
+            ai_config.is_default = True
+            session.commit()
+            logger.info(f"Set default AI config: {config_name}")
+    
+    def _ai_config_to_dict(self, ai_config: AIConfig) -> Dict[str, Any]:
+        return {
+            'id': ai_config.id,
+            'name': ai_config.name,
+            'display_name': ai_config.display_name,
+            'provider_type': ai_config.provider_type,
+            'config': ai_config.config,
+            'is_default': ai_config.is_default,
+            'enabled': ai_config.enabled,
+            'created_at': ai_config.created_at.isoformat() if ai_config.created_at else None,
+            'updated_at': ai_config.updated_at.isoformat() if ai_config.updated_at else None
         }
     
     def _task_to_dict(self, task: Task) -> Dict[str, Any]:
